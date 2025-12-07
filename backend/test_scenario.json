@@ -1,0 +1,18 @@
+{
+  "persona": {
+    "name": null,
+    "age": 25,
+    "gender_identity": "woman",
+    "social_class": "working class",
+    "occupation": "factory worker"
+  },
+  "context": {
+    "region": "Western Europe",
+    "country_or_area": "United Kingdom",
+    "year_from": 1900,
+    "year_to": 1930,
+    "urban_or_rural": "urban"
+  },
+  "language": "english",
+  "word_count": 600
+}
