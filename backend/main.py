@@ -1,4 +1,4 @@
-# main.py $env:MISTRAL_API_KEY = "YdwaJTqpa65xPZFgURh6cxS6OW3H0P45"
+# main.py 
 
 import os
 import random
