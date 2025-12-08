@@ -3,6 +3,7 @@ Installera via hemsidan, klicka i PATH saken.
 cd backend
 Första gång: python -m venv venv
 sedan: pip install fastapi uvicorn mistralai
+pip install requests
 
 -- Frontend: React install -- 
 cd frontend
