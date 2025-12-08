@@ -1,1 +1,3 @@
 $env:MISTRAL_API_KEY = "YdwaJTqpa65xPZFgURh6cxS6OW3H0P45"
+$env:STABILITY_API_KEY = "sk-6XKeuhEKPgkrrVWweadWpFnACHKEh3joXNKDr9GAUsxETXTr"
+uvicorn main:app --reload
