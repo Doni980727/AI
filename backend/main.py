@@ -1,17 +1,18 @@
-# main.py 
+# main.py
 
 import os
 import random
 from typing import Optional, Literal
 
+import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from mistralai import Mistral
 
-# ========= 1. Mistral setup =========
+# ========= 1. API-nycklar & klienter =========
 
-# Get your API key from env variable
+# Mistral (text)
 API_KEY = os.environ.get("MISTRAL_API_KEY")
 if not API_KEY:
     raise RuntimeError(
@@ -19,17 +20,26 @@ if not API_KEY:
         "In PowerShell, run:  $env:MISTRAL_API_KEY = 'your_key_here'"
     )
 
-# Choose a model – you can change this if you get access to larger ones
 MODEL_NAME = "mistral-small-latest"
-
-# Create the client
 client = Mistral(api_key=API_KEY)
+
+# Stability (bilder)
+STABILITY_API_KEY = os.environ.get("STABILITY_API_KEY")
+if not STABILITY_API_KEY:
+    raise RuntimeError(
+        "STABILITY_API_KEY is not set. "
+        "In PowerShell, run:  $env:STABILITY_API_KEY = 'your_stability_key_here'"
+    )
+
+# Stable Diffusion XL text-to-image endpoint
+STABILITY_ENDPOINT = (
+    "https://api.stability.ai/v2beta/stable-image/generate/sd3"
+)
 
 # ========= 2. FastAPI app + CORS =========
 
 app = FastAPI()
 
-# Allow your React dev server (Vite) to call the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -39,6 +49,7 @@ app.add_middleware(
 )
 
 # ========= 3. Data models =========
+
 
 class ScenarioPersona(BaseModel):
     name: Optional[str] = None
@@ -66,6 +77,8 @@ class ScenarioRequest(BaseModel):
 class SpinResult(BaseModel):
     persona: ScenarioPersona
     context: ScenarioContext
+    # NYTT: vi skickar med bilden direkt från /api/spin
+    image_base64: Optional[str] = None
 
 
 class CompareRequest(BaseModel):
@@ -78,14 +91,93 @@ class CompareRequest(BaseModel):
     scenario_b: str
 
 
-# ========= 4. Simple health endpoint =========
+# ========= 4. Hjälpfunktion för Stability-bild =========
+
+
+def generate_persona_image_base64(
+    persona: ScenarioPersona, context: ScenarioContext
+) -> Optional[str]:
+    """
+    Anrop till Stability AI (v2beta sd3).
+    Skickar multipart/form-data och försöker läsa ut base64-bilden ur JSON-svaret.
+    """
+
+    prompt = f"""
+Portrait of a person from history, for an educational project about gender and society.
+
+Details to capture:
+- Gender identity (understood historically): {persona.gender_identity}
+- Social class: {persona.social_class}
+- Occupation: {persona.occupation}
+- Region: {context.region}
+- Country/area: {context.country_or_area}
+- Time period: roughly {context.year_from}–{context.year_to}
+- Setting: {context.urban_or_rural or "not specified"}
+
+Art direction:
+- Historically plausible clothing, hairstyle, and environment for this time and place.
+- Respectful, documentary-style illustration; no sexualisation, no caricature, no stereotypes.
+- Soft, natural lighting; neutral or thoughtful facial expression.
+- Medium: semi-realistic illustration suitable for teaching materials.
+"""
+
+    # Viktigt: *inte* sätta Content-Type själv, requests gör det åt oss för multipart
+    headers = {
+        "Authorization": f"Bearer {STABILITY_API_KEY}",
+        "Accept": "application/json",  # då får vi base64 i JSON-svar
+    }
+
+    # multipart/form-data via files=
+    files = {
+        "prompt": (None, prompt),
+        "output_format": (None, "png"),
+        "aspect_ratio": (None, "1:1"),
+        "mode": (None, "text-to-image"),
+        # "model": (None, "sd3"),  # du kan testa kommentera bort denna om ditt konto inte kräver den
+    }
+
+    try:
+        resp = requests.post(
+            STABILITY_ENDPOINT,
+            headers=headers,
+            files=files,   # 👈 nu skickar vi multipart/form-data
+            timeout=60,
+        )
+        print("Stability status:", resp.status_code)
+        print("Stability raw response:", resp.text[:500])
+
+        resp.raise_for_status()
+        js = resp.json()
+
+        # Försök några vanliga nycklar för base64-fältet
+        if "image" in js:              # t.ex. {"image": "<base64>"}
+            return js["image"]
+        if "images" in js and isinstance(js["images"], list) and js["images"]:
+            # t.ex. {"images": ["<base64>", ...]}
+            return js["images"][0]
+        artifacts = js.get("artifacts") or []
+        if artifacts:
+            return artifacts[0].get("base64")
+
+        print("No image field in Stability response JSON")
+        return None
+    except Exception as exc:
+        print("Stability image generation failed:", exc)
+        return None
+
+
+
+
+# ========= 5. Simple health endpoint =========
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
-# ========= 5. Spin-the-wheel endpoint =========
+# ========= 6. Spin-the-wheel endpoint =========
+
 
 @app.post("/api/spin", response_model=SpinResult)
 async def spin_wheel():
@@ -94,7 +186,6 @@ async def spin_wheel():
     This is your 'Spin the Wheel' result.
     """
 
-    # You can expand and refine these lists later
     genders = [
         "woman",
         "man",
@@ -165,10 +256,14 @@ async def spin_wheel():
         urban_or_rural=urban,
     )
 
-    return SpinResult(persona=persona, context=context)
+    # NYTT: generera bild direkt vid spin
+    image_b64 = generate_persona_image_base64(persona, context)
+
+    return SpinResult(persona=persona, context=context, image_base64=image_b64)
 
 
-# ========= 6. Generate scenario (timeline-style) =========
+# ========= 7. Generate scenario (timeline-style) =========
+
 
 @app.post("/api/generate-scenario")
 async def generate_scenario(req: ScenarioRequest):
@@ -243,7 +338,8 @@ Write in {req.language}. Use clear headings and paragraphs. Aim for about {req.w
     return {"scenario": scenario_text}
 
 
-# ========= 7. Compare two scenarios =========
+# ========= 8. Compare two scenarios =========
+
 
 @app.post("/api/compare")
 async def compare_scenarios(req: CompareRequest):
