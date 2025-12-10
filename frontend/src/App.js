@@ -1,17 +1,32 @@
 import React, { useState } from "react";
+import SpinWheel from "./Spinwheel";
 
 const API_BASE = "http://127.0.0.1:8000";
+
+const GENDER_OPTIONS = ["woman", "man", "non-binary person"];
+const REGION_OPTIONS = [
+  "Western Europe",
+  "Northern Europe",
+  "East Asia",
+  "South Asia",
+  "North Africa",
+  "West Africa",
+  "Latin America",
+];
+const PERIOD_OPTIONS = ["1850–1890", "1900–1930", "1950–1970", "1980–2000", "2000–2020"];
 
 function App() {
   // Persona A
   const [spinA, setSpinA] = useState(null);
   const [scenarioA, setScenarioA] = useState("");
   const [loadingA, setLoadingA] = useState(false);
+  const [spinningA, setSpinningA] = useState(false);
 
   // Persona B
   const [spinB, setSpinB] = useState(null);
   const [scenarioB, setScenarioB] = useState("");
   const [loadingB, setLoadingB] = useState(false);
+  const [spinningB, setSpinningB] = useState(false);
 
   // Comparison
   const [comparison, setComparison] = useState("");
@@ -35,13 +50,15 @@ function App() {
       setError("");
       setScenarioA("");
       setComparison("");
-      const data = await callJson(`${API_BASE}/api/spin`, {
-        method: "POST",
-        body: "{}",
-      });
-      setSpinA(data);
+      setSpinningA(true);
+
+      // fetch spin result from API
+      const data = await callJson(`${API_BASE}/api/spin`, { method: "POST", body: "{}" });
+      setSpinA(data); // pass result to wheels
+      // attributes will show after animation ends via onSpinEnd
     } catch (err) {
       setError(err.message);
+      setSpinningA(false);
     }
   };
 
@@ -50,18 +67,17 @@ function App() {
       setError("");
       setScenarioB("");
       setComparison("");
-      const data = await callJson(`${API_BASE}/api/spin`, {
-        method: "POST",
-        body: "{}",
-      });
+      setSpinningB(true);
+
+      const data = await callJson(`${API_BASE}/api/spin`, { method: "POST", body: "{}" });
       setSpinB(data);
     } catch (err) {
       setError(err.message);
+      setSpinningB(false);
     }
   };
 
   // --- GENERATE STORY HANDLERS ---
-
   const handleGenerateA = async () => {
     if (!spinA) return setError("Spin the wheel for Persona A first.");
     try {
@@ -109,7 +125,6 @@ function App() {
   };
 
   // --- COMPARE TWO STORIES ---
-
   const handleCompare = async () => {
     if (!scenarioA || !scenarioB)
       return setError("Generate both scenarios before comparing.");
@@ -138,87 +153,66 @@ function App() {
   };
 
   // --- UI HELPERS ---
-
-  const renderPersonaCard = (label, spin, onSpin, onGenerate, loading, story) => {
-    // Here we extract the image from backend (if it exists)
-    const imageSrc =
-      spin && spin.image_base64
-        ? `data:image/png;base64,${spin.image_base64}`
-        : null;
+  const renderPersonaCard = (label, spin, onSpin, onGenerate, loading, story, spinning, setSpinning) => {
+    const imageSrc = spin && spin.image_base64 ? `data:image/png;base64,${spin.image_base64}` : null;
 
     return (
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 16,
-          width: "48%",
-          boxSizing: "border-box",
-        }}
-      >
+      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, width: "48%", boxSizing: "border-box" }}>
         <h2>{label}</h2>
 
-        <button onClick={onSpin} style={{ marginRight: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-around", marginBottom: 12 }}>
+          <SpinWheel
+            spinning={spinning}
+            options={GENDER_OPTIONS}
+            result={spin ? spin.persona.gender_identity : null}
+            onSpinEnd={() => setSpinning(false)}
+          />
+          <SpinWheel
+            spinning={spinning}
+            options={REGION_OPTIONS}
+            result={spin ? spin.context.region : null}
+            onSpinEnd={() => setSpinning(false)}
+          />
+          <SpinWheel
+            spinning={spinning}
+            options={PERIOD_OPTIONS}
+            result={spin ? `${spin.context.year_from}–${spin.context.year_to}` : null}
+            onSpinEnd={() => setSpinning(false)}
+          />
+        </div>
+
+        <button onClick={onSpin} style={{ marginRight: 8 }} disabled={spinning}>
           Spin the wheel
         </button>
         <button onClick={onGenerate} disabled={!spin || loading}>
           {loading ? "Generating..." : "Generate story"}
         </button>
 
-        {spin && (
+        {spin && !spinning && (
           <div style={{ marginTop: 16, fontSize: 14 }}>
             <h3>Attributes</h3>
-            <p>
-              <strong>Gender:</strong> {spin.persona.gender_identity}
-            </p>
-            <p>
-              <strong>Class:</strong> {spin.persona.social_class}
-            </p>
-            <p>
-              <strong>Occupation:</strong> {spin.persona.occupation}
-            </p>
-            <p>
-              <strong>Region:</strong> {spin.context.region}
-            </p>
-            <p>
-              <strong>Country:</strong> {spin.context.country_or_area}
-            </p>
-            <p>
-              <strong>Period:</strong> {spin.context.year_from}–{spin.context.year_to}
-            </p>
-            <p>
-              <strong>Setting:</strong> {spin.context.urban_or_rural}
-            </p>
+            <p><strong>Gender:</strong> {spin.persona.gender_identity}</p>
+            <p><strong>Class:</strong> {spin.persona.social_class}</p>
+            <p><strong>Occupation:</strong> {spin.persona.occupation}</p>
+            <p><strong>Region:</strong> {spin.context.region}</p>
+            <p><strong>Country:</strong> {spin.context.country_or_area}</p>
+            <p><strong>Period:</strong> {spin.context.year_from}–{spin.context.year_to}</p>
+            <p><strong>Setting:</strong> {spin.context.urban_or_rural}</p>
           </div>
         )}
 
-        {/* Show image if we got a base64 string */}
         {imageSrc && (
           <div style={{ marginTop: 16, textAlign: "center" }}>
             <img
               src={imageSrc}
               alt={`${label} portrait`}
-              style={{
-                maxWidth: "50%",
-                borderRadius: 8,
-                border: "1px solid #ccc",
-              }}
+              style={{ maxWidth: "50%", borderRadius: 8, border: "1px solid #ccc" }}
             />
           </div>
         )}
 
         {story && (
-          <div
-            style={{
-              marginTop: 16,
-              border: "1px solid #ccc",
-              padding: 12,
-              borderRadius: 6,
-              whiteSpace: "pre-wrap",
-              maxHeight: 250,
-              overflowY: "auto",
-            }}
-          >
+          <div style={{ marginTop: 16, border: "1px solid #ccc", padding: 12, borderRadius: 6, whiteSpace: "pre-wrap", maxHeight: 250, overflowY: "auto" }}>
             {story}
           </div>
         )}
@@ -226,65 +220,25 @@ function App() {
     );
   };
 
-  // --- RENDER MAIN UI ---
-
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
       <h1>Spin-the-Wheel: Gendered Lives Across History</h1>
-      <p>
-        Spin the wheel to generate two personas from different places and times.{" "}
-        Generate their stories, then compare how gender, norms, and environment shaped
-        their lives.
-      </p>
+      <p>Spin the wheel to generate two personas from different places and times. Generate their stories, then compare how gender, norms, and environment shaped their lives.</p>
 
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
-      {/* Two persona columns */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: 20,
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        {renderPersonaCard(
-          "Persona A",
-          spinA,
-          handleSpinA,
-          handleGenerateA,
-          loadingA,
-          scenarioA
-        )}
-        {renderPersonaCard(
-          "Persona B",
-          spinB,
-          handleSpinB,
-          handleGenerateB,
-          loadingB,
-          scenarioB
-        )}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20, gap: 16, flexWrap: "wrap" }}>
+        {renderPersonaCard("Persona A", spinA, handleSpinA, handleGenerateA, loadingA, scenarioA, spinningA, setSpinningA)}
+        {renderPersonaCard("Persona B", spinB, handleSpinB, handleGenerateB, loadingB, scenarioB, spinningB, setSpinningB)}
       </div>
 
-      {/* Compare button */}
       <div style={{ marginTop: 30 }}>
         <h2>Compare the two lives</h2>
         <button onClick={handleCompare} disabled={loadingCompare}>
           {loadingCompare ? "Comparing..." : "Compare A & B"}
         </button>
-
         {comparison && (
-          <div
-            style={{
-              marginTop: 20,
-              padding: 15,
-              border: "1px solid #bbb",
-              borderRadius: 6,
-              background: "#f5f5ff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
+          <div style={{ marginTop: 20, padding: 15, border: "1px solid #bbb", borderRadius: 6, background: "#f5f5ff", whiteSpace: "pre-wrap" }}>
             {comparison}
           </div>
         )}
