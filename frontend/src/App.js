@@ -140,7 +140,7 @@ function App() {
   // --- UI HELPERS ---
 
   const renderPersonaCard = (label, spin, onSpin, onGenerate, loading, story) => {
-    // Här plockar vi ut bilden från backend (om den finns)
+    // Here we extract the image from backend (if it exists)
     const imageSrc =
       spin && spin.image_base64
         ? `data:image/png;base64,${spin.image_base64}`
@@ -192,7 +192,7 @@ function App() {
           </div>
         )}
 
-        {/* Visa bilden om vi har fått en base64-sträng */}
+        {/* Show image if we got a base64 string */}
         {imageSrc && (
           <div style={{ marginTop: 16, textAlign: "center" }}>
             <img
