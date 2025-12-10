@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from mistralai import Mistral
 
-# ========= 1. API-nycklar & klienter =========
+# ========= 1. API keys & clients =========
 
 # Mistral (text)
 API_KEY = os.environ.get("MISTRAL_API_KEY")
@@ -23,7 +23,7 @@ if not API_KEY:
 MODEL_NAME = "mistral-small-latest"
 client = Mistral(api_key=API_KEY)
 
-# Stability (bilder)
+# Stability (images)
 STABILITY_API_KEY = os.environ.get("STABILITY_API_KEY")
 if not STABILITY_API_KEY:
     raise RuntimeError(
@@ -77,7 +77,7 @@ class ScenarioRequest(BaseModel):
 class SpinResult(BaseModel):
     persona: ScenarioPersona
     context: ScenarioContext
-    # NYTT: vi skickar med bilden direkt från /api/spin
+    # NEW: we send the image directly from /api/spin
     image_base64: Optional[str] = None
 
 
@@ -91,15 +91,15 @@ class CompareRequest(BaseModel):
     scenario_b: str
 
 
-# ========= 4. Hjälpfunktion för Stability-bild =========
+# ========= 4. Helper function for Stability image =========
 
 
 def generate_persona_image_base64(
     persona: ScenarioPersona, context: ScenarioContext
 ) -> Optional[str]:
     """
-    Anrop till Stability AI (v2beta sd3).
-    Skickar multipart/form-data och försöker läsa ut base64-bilden ur JSON-svaret.
+    Call to Stability AI (v2beta sd3).
+    Sends multipart/form-data and tries to read the base64 image from the JSON response.
     """
 
     prompt = f"""
@@ -121,10 +121,10 @@ Art direction:
 - Medium: semi-realistic illustration suitable for teaching materials.
 """
 
-    # Viktigt: *inte* sätta Content-Type själv, requests gör det åt oss för multipart
+    # Important: *don't* set Content-Type ourselves, requests does it for us for multipart
     headers = {
         "Authorization": f"Bearer {STABILITY_API_KEY}",
-        "Accept": "application/json",  # då får vi base64 i JSON-svar
+        "Accept": "application/json",  # then we get base64 in JSON response
     }
 
     # multipart/form-data via files=
@@ -133,14 +133,14 @@ Art direction:
         "output_format": (None, "png"),
         "aspect_ratio": (None, "1:1"),
         "mode": (None, "text-to-image"),
-        # "model": (None, "sd3"),  # du kan testa kommentera bort denna om ditt konto inte kräver den
+        # "model": (None, "sd3"),  # you can try commenting this out if your account doesn't require it
     }
 
     try:
         resp = requests.post(
             STABILITY_ENDPOINT,
             headers=headers,
-            files=files,   # 👈 nu skickar vi multipart/form-data
+            files=files,   # 👈 now we send multipart/form-data
             timeout=60,
         )
         print("Stability status:", resp.status_code)
@@ -149,11 +149,11 @@ Art direction:
         resp.raise_for_status()
         js = resp.json()
 
-        # Försök några vanliga nycklar för base64-fältet
-        if "image" in js:              # t.ex. {"image": "<base64>"}
+        # Try some common keys for the base64 field
+        if "image" in js:              # e.g. {"image": "<base64>"}
             return js["image"]
         if "images" in js and isinstance(js["images"], list) and js["images"]:
-            # t.ex. {"images": ["<base64>", ...]}
+            # e.g. {"images": ["<base64>", ...]}
             return js["images"][0]
         artifacts = js.get("artifacts") or []
         if artifacts:
@@ -256,8 +256,9 @@ async def spin_wheel():
         urban_or_rural=urban,
     )
 
-    # NYTT: generera bild direkt vid spin
+    # NEW: generate image directly on spin
     image_b64 = generate_persona_image_base64(persona, context)
+    # image_b64 = None  # Skip image generation to save credits
 
     return SpinResult(persona=persona, context=context, image_base64=image_b64)
 
