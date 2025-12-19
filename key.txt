@@ -10,8 +10,8 @@ cd frontend
 npm install
 
 -- För att starta backend -- 
-$env:MISTRAL_API_KEY = "YdwaJTqpa65xPZFgURh6cxS6OW3H0P45"
-$env:STABILITY_API_KEY = "sk-6XKeuhEKPgkrrVWweadWpFnACHKEh3joXNKDr9GAUsxETXTr"
+$env:MISTRAL_API_KEY = "API-Key"
+$env:STABILITY_API_KEY = "API-Key"
 uvicorn main:app --reload
 
 -- För att starta frontend --

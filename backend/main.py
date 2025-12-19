@@ -257,8 +257,8 @@ async def spin_wheel():
     )
 
     # NEW: generate image directly on spin första med bild andra utan
-    # image_b64 = generate_persona_image_base64(persona, context)
-    image_b64 = None  # Skip image generation to save credits
+    image_b64 = generate_persona_image_base64(persona, context)
+    # image_b64 = None  # Skip image generation to save credits
 
     return SpinResult(persona=persona, context=context, image_base64=image_b64)
 
